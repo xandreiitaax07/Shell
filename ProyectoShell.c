@@ -30,6 +30,7 @@ int main(void)
   int status;             // Estado que devuelve la funci�n wait
   enum status status_res; // Estado procesado por analyze_status()
   int info;		      // Informaci�n procesada por analyze_status()
+  ignore_terminal_signals();
 
   while (1) // El programa termina cuando se pulsa Control+D dentro de get_command()
   {   		
@@ -38,6 +39,7 @@ int main(void)
     get_command(inputBuffer, MAX_LINE, args, &background); // Obtener el pr�ximo comando
     if (args[0]==NULL) continue; // Si se introduce un comando vacio, no hacemos nada
 
+    //Comandos internos
     if (strcmp(args[0], "cd") == 0){ //FASE 2
       if(chdir(args[1]) == -1){ //si el comando no existe sale un mensaje de error
         printf("\nError. Directorio no encontrado\n");
@@ -53,20 +55,41 @@ int main(void)
     pid_fork = fork(); //Creamos proceso hijo
 
     if(pid_fork > 0){//Creamos proceso padre
+    new_process_group(pid_fork);
       if(!background){ //primer plano
-        pid_wait = waitpid(pid_fork, &status, 0); //espera al proceso hijo
-        status_res = analyze_status(status, &info);
-        if(info != 255){
-          printf("\nComando %s ejecutado en primer plano con pid %i. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
+        set_terminal(pid_fork);
+        pid_wait = waitpid(pid_fork, &status, WUNTRACED); //espera al proceso hijo
+        set_terminal(getpid()); //el padre una vez el hijo finalice lo que esté haciendo recupera la terminal
+        
+        if(pid_fork = pid_wait){ //cuando el proceso que el pare espera es igual al hijo que esta en la terminal
+          status_res = analyze_status(status, &info); //analizamos el estado del hijo
+
+          if(status_res == SUSPENDIDO){ //si el estado del hijo es suspendido
+            printf("\nComando %s ejecutado en primer plano con pid %i. Estado %s. Info: %i\n", args[0], pid_fork,status_strings[status_res], info);
+          }else if(status_res == FINALIZADO){ //si el estado del hijo es finalizado, es decir, que ha finalizado su ejecucion
+            if(info != 255){
+              printf("\nComando %s ejecutado en primer plano con pid %i. Estado %s. Info: %i\n", args[0], pid_fork,status_strings[status_res], info);
+            }
+          }
+
+          
         }
         
       }else{ //segundo plano
        printf("\nComando %s ejecutado en segundo plano con pid %i.\n", args[0], pid_fork);
       }   
     }else if (pid_fork == 0){ //proceso hijo
+      new_process_group(getpid()); //Asignamos grupo propio
+      if(!background){
+        set_terminal(getpid()); //el hijo toma la terminal
+      }
+      restore_terminal_signals(); //una vez finalizado el hijo, restablecemos las señales de la terminal
       execvp(args[0], args); //sustituye todo el codigo por el comando que introduzcamos
       printf("\nError. Comando %s no encontrado\n", args[0]); //si no se encuntra la funcion lanzamos un error
       exit(-1); //y salimos
+    }else{
+      perror("\nError en el fork\n");
+      continue;
     }
   }
 }
