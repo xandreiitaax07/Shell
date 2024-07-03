@@ -36,29 +36,38 @@ int main(void)
     printf("COMANDO->");
     fflush(stdout);
     get_command(inputBuffer, MAX_LINE, args, &background); // Obtener el pr�ximo comando
-    if (args[0]==NULL) continue; // Si se introduce un comando vac�o, no hacemos nada
-/* Los pasos a seguir a partir de aqu�, son:
-   (1) Genera un proceso hijo con fork()
-   (2) El proceso hijo invocar� a execvp()
-   (3) El proceso padre esperar� si background es 0; de lo contrario, "continue" 
-   (4) El Shell muestra el mensaje de estado del comando procesado
-   // (5) El bucle while regresa a la funci�n get_command()
-*/
+    if (args[0]==NULL) continue; // Si se introduce un comando vacio, no hacemos nada
 
-  pid_fork = fork(); //Creamos proceso hijo
+    if (strcmp(args[0], "cd") == 0){ //FASE 2
+      if(chdir(args[1]) == -1){ //si el comando no existe sale un mensaje de error
+        printf("\nError. Directorio no encontrado\n");
+      }
+      continue;
+    }
 
-  if(pid_fork > 0){//Creamos proceso padre
-    if(!background){ //primer plano
-      pid_wait = waitpid(pid_fork, &status, 0); //espera al proceso hijo
-      status_res = analyze_status(status, &info); //
-      printf("\nComando %s ejecutado en primer plano con pid %i. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
-    }else{ //segundo plano
-      printf("\nComando %s ejecutado en segundo plano con pid %i.\n", args[0], pid_fork);
-    }   
-  }else if (pid_fork == 0){ //proceso hijo
-    execvp(args[0], args); //sustituye todo el codigo por el comando que introduzcamos
-    printf("\nError. Comando %s no encontrado\n", args[0]); //si no se encuntra la funcion lanzamos un error
-    exit(-1); //y salimos
+    if (strcmp(args[0], "logout") == 0){ //FASE 2
+      printf("\nSaliendo del Shell...\n");
+      exit(0);
+    }
+
+    pid_fork = fork(); //Creamos proceso hijo
+
+    if(pid_fork > 0){//Creamos proceso padre
+      if(!background){ //primer plano
+        pid_wait = waitpid(pid_fork, &status, 0); //espera al proceso hijo
+        status_res = analyze_status(status, &info);
+        if(info != 255){
+          printf("\nComando %s ejecutado en primer plano con pid %i. Estado finalizado. Info: %d\n", args[0], pid_fork, info);
+        }
+        
+      }else{ //segundo plano
+       printf("\nComando %s ejecutado en segundo plano con pid %i.\n", args[0], pid_fork);
+      }   
+    }else if (pid_fork == 0){ //proceso hijo
+      execvp(args[0], args); //sustituye todo el codigo por el comando que introduzcamos
+      printf("\nError. Comando %s no encontrado\n", args[0]); //si no se encuntra la funcion lanzamos un error
+      exit(-1); //y salimos
+    }
   }
 }
 
